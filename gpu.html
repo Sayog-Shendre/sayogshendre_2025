@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU-Accelerated Particle System</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #0c0c0c, #1a1a2e);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        canvas {
+            display: block;
+            background: radial-gradient(circle at center, #16213e 0%, #0f0f23 100%);
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            min-width: 250px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64ffda;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            border-radius: 2px;
+            
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            
+            width: 16px;
+            height: 16px;
+            background: #64ffda;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .color-preset {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin: 2px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .color-preset:hover, .color-preset.active {
+            border-color: white;
+            transform: scale(1.2);
+        }
+        
+        .stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label>Particle Count</label>
+            <input type="range" id="particleCount" min="100" max="2000" value="800">
+            <span id="particleCountValue">800</span>
+        </div>
+        
+        <div class="control-group">
+            <label>Burst Speed</label>
+            <input type="range" id="burstSpeed" min="50" max="300" value="150">
+            <span id="burstSpeedValue">150</span>
+        </div>
+        
+        <div class="control-group">
+            <label>Gravity</label>
+            <input type="range" id="gravity" min="0" max="200" value="80">
+            <span id="gravityValue">80</span>
+        </div>
+        
+        <div class="control-group">
+            <label>Particle Size</label>
+            <input type="range" id="particleSize" min="1" max="8" value="3">
+            <span id="particleSizeValue">3</span>
+        </div>
+        
+        <div class="control-group">
+            <label>Color Themes</label>
+            <div>
+                <div class="color-preset active" style="background: #ff6b6b;" data-colors="1.0,0.4,0.4 1.0,0.8,0.2 1.0,0.2,0.8"></div>
+                <div class="color-preset" style="background: #4ecdc4;" data-colors="0.3,0.8,0.8 0.2,0.6,1.0 0.8,0.4,1.0"></div>
+                <div class="color-preset" style="background: #45b7d1;" data-colors="0.3,0.7,0.9 0.6,0.9,1.0 0.2,0.5,1.0"></div>
+                <div class="color-preset" style="background: #96ceb4;" data-colors="0.6,0.8,0.7 0.3,1.0,0.5 0.8,1.0,0.3"></div>
+                <div class="color-preset" style="background: #feca57;" data-colors="1.0,0.8,0.3 1.0,0.6,0.2 1.0,0.4,0.6"></div>
+                <div class="color-preset" style="background: #ff9ff3;" data-colors="1.0,0.6,0.9 0.8,0.4,1.0 0.6,0.8,1.0"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Active Particles: <span id="activeParticles">0</span></div>
+        <div>Total Bursts: <span id="totalBursts">0</span></div>
+    </div>
+    
+    <div class="instructions">
+        Click anywhere to create magical energy bursts! 🌟
+    </div>
+
+    <script>
+        class ParticleSystem {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
+                
+                if (!this.gl) {
+                    alert('WebGL not supported');
+                    return;
+                }
+                
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+                
+                // Particle system properties
+                this.maxParticles = 2000;
+                this.particlesPerBurst = 800;
+                this.particles = [];
+                this.activeParticles = 0;
+                this.totalBursts = 0;
+                
+                // Physics settings
+                this.gravity = 80.0;
+                this.burstSpeed = 150.0;
+                this.particleSize = 3.0;
+                
+                // Color themes
+                this.currentColors = [
+                    [1.0, 0.4, 0.4],
+                    [1.0, 0.8, 0.2],
+                    [1.0, 0.2, 0.8]
+                ];
+                
+                // Performance tracking
+                this.lastFrameTime = 0;
+                this.frameCount = 0;
+                this.fps = 0;
+                
+                this.initWebGL();
+                this.initBuffers();
+                this.initEventListeners();
+                this.animate();
+            }
+            
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                if (this.gl) {
+                    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                }
+            }
+            
+            initWebGL() {
+                const gl = this.gl;
+                
+                // Vertex shader - handles particle positioning and animation
+                const vertexShaderSource = `
+                    attribute vec2 a_position;
+                    attribute vec2 a_velocity;
+                    attribute vec3 a_color;
+                    attribute float a_life;
+                    attribute float a_maxLife;
+                    attribute float a_size;
+                    
+                    uniform vec2 u_resolution;
+                    uniform float u_time;
+                    uniform float u_gravity;
+                    
+                    varying vec3 v_color;
+                    varying float v_alpha;
+                    varying float v_life;
+                    
+                    void main() {
+                        float t = u_time - (a_maxLife - a_life);
+                        float normalizedLife = a_life / a_maxLife;
+                        
+                        // Calculate position with physics
+                        vec2 pos = a_position + a_velocity * t;
+                        pos.y -= 0.5 * u_gravity * t * t;
+                        
+                        // Convert to clip space
+                        vec2 clipSpace = ((pos / u_resolution) * 2.0 - 1.0) * vec2(1, -1);
+                        gl_Position = vec4(clipSpace, 0, 1);
+                        
+                        // Particle size with distance falloff
+                        gl_PointSize = a_size * (normalizedLife * 0.8 + 0.2);
+                        
+                        // Color transitions and fading
+                        v_color = a_color;
+                        v_alpha = normalizedLife * normalizedLife; // Quadratic fade
+                        v_life = normalizedLife;
+                    }
+                `;
+                
+                // Fragment shader - handles particle rendering with effects
+                const fragmentShaderSource = `
+                    precision mediump float;
+                    
+                    varying vec3 v_color;
+                    varying float v_alpha;
+                    varying float v_life;
+                    
+                    void main() {
+                        // Create circular particle shape
+                        vec2 coord = gl_PointCoord - vec2(0.5);
+                        float dist = length(coord);
+                        
+                        if (dist > 0.5) {
+                            discard;
+                        }
+                        
+                        // Soft circular gradient
+                        float intensity = 1.0 - (dist * 2.0);
+                        intensity = pow(intensity, 2.0);
+                        
+                        // Color evolution over lifetime
+                        vec3 color = v_color;
+                        if (v_life > 0.7) {
+                            // Bright core when young
+                            color = mix(color, vec3(1.0, 1.0, 0.8), (v_life - 0.7) * 3.33);
+                        }
+                        
+                        // Apply intensity and alpha
+                        color *= intensity;
+                        float alpha = v_alpha * intensity;
+                        
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `;
+                
+                // Compile shaders
+                const vertexShader = this.createShader(gl.VERTEX_SHADER, vertexShaderSource);
+                const fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+                
+                // Create program
+                this.program = gl.createProgram();
+                gl.attachShader(this.program, vertexShader);
+                gl.attachShader(this.program, fragmentShader);
+                gl.linkProgram(this.program);
+                
+                if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+                    console.error('Program link error:', gl.getProgramInfoLog(this.program));
+                    return;
+                }
+                
+                // Get attribute and uniform locations
+                this.locations = {
+                    position: gl.getAttribLocation(this.program, 'a_position'),
+                    velocity: gl.getAttribLocation(this.program, 'a_velocity'),
+                    color: gl.getAttribLocation(this.program, 'a_color'),
+                    life: gl.getAttribLocation(this.program, 'a_life'),
+                    maxLife: gl.getAttribLocation(this.program, 'a_maxLife'),
+                    size: gl.getAttribLocation(this.program, 'a_size'),
+                    resolution: gl.getUniformLocation(this.program, 'u_resolution'),
+                    time: gl.getUniformLocation(this.program, 'u_time'),
+                    gravity: gl.getUniformLocation(this.program, 'u_gravity')
+                };
+                
+                // Setup WebGL state
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending
+                gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            }
+            
+            createShader(type, source) {
+                const gl = this.gl;
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                
+                return shader;
+            }
+            
+            initBuffers() {
+                const gl = this.gl;
+                
+                // Create buffers for particle data
+                this.buffers = {
+                    position: gl.createBuffer(),
+                    velocity: gl.createBuffer(),
+                    color: gl.createBuffer(),
+                    life: gl.createBuffer(),
+                    maxLife: gl.createBuffer(),
+                    size: gl.createBuffer()
+                };
+                
+                // Initialize particle data arrays
+                this.particleData = {
+                    positions: new Float32Array(this.maxParticles * 2),
+                    velocities: new Float32Array(this.maxParticles * 2),
+                    colors: new Float32Array(this.maxParticles * 3),
+                    lives: new Float32Array(this.maxParticles),
+                    maxLives: new Float32Array(this.maxParticles),
+                    sizes: new Float32Array(this.maxParticles)
+                };
+            }
+            
+            createBurst(x, y) {
+                const startIndex = this.activeParticles;
+                const count = Math.min(this.particlesPerBurst, this.maxParticles - this.activeParticles);
+                
+                for (let i = 0; i < count; i++) {
+                    const index = startIndex + i;
+                    
+                    // Random burst direction and speed
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = this.burstSpeed * (0.5 + Math.random() * 0.5);
+                    const spread = 0.3 + Math.random() * 0.7; // Velocity variation
+                    
+                    // Position
+                    this.particleData.positions[index * 2] = x;
+                    this.particleData.positions[index * 2 + 1] = y;
+                    
+                    // Velocity with some randomness
+                    this.particleData.velocities[index * 2] = Math.cos(angle) * speed * spread;
+                    this.particleData.velocities[index * 2 + 1] = Math.sin(angle) * speed * spread;
+                    
+                    // Random color from current theme
+                    const colorIndex = Math.floor(Math.random() * this.currentColors.length);
+                    const color = this.currentColors[colorIndex];
+                    this.particleData.colors[index * 3] = color[0] * (0.8 + Math.random() * 0.2);
+                    this.particleData.colors[index * 3 + 1] = color[1] * (0.8 + Math.random() * 0.2);
+                    this.particleData.colors[index * 3 + 2] = color[2] * (0.8 + Math.random() * 0.2);
+                    
+                    // Lifetime with variation
+                    const life = 2.0 + Math.random() * 2.0;
+                    this.particleData.lives[index] = life;
+                    this.particleData.maxLives[index] = life;
+                    
+                    // Size with variation
+                    this.particleData.sizes[index] = this.particleSize * (0.5 + Math.random() * 1.0);
+                }
+                
+                this.activeParticles = Math.min(this.activeParticles + count, this.maxParticles);
+                this.totalBursts++;
+                this.updateBuffers();
+            }
+            
+            updateParticles(deltaTime) {
+                let writeIndex = 0;
+                
+                // Update and compact particle array
+                for (let i = 0; i < this.activeParticles; i++) {
+                    this.particleData.lives[i] -= deltaTime;
+                    
+                    // Keep alive particles
+                    if (this.particleData.lives[i] > 0) {
+                        if (writeIndex !== i) {
+                            // Copy particle data
+                            this.particleData.positions[writeIndex * 2] = this.particleData.positions[i * 2];
+                            this.particleData.positions[writeIndex * 2 + 1] = this.particleData.positions[i * 2 + 1];
+                            this.particleData.velocities[writeIndex * 2] = this.particleData.velocities[i * 2];
+                            this.particleData.velocities[writeIndex * 2 + 1] = this.particleData.velocities[i * 2 + 1];
+                            this.particleData.colors[writeIndex * 3] = this.particleData.colors[i * 3];
+                            this.particleData.colors[writeIndex * 3 + 1] = this.particleData.colors[i * 3 + 1];
+                            this.particleData.colors[writeIndex * 3 + 2] = this.particleData.colors[i * 3 + 2];
+                            this.particleData.lives[writeIndex] = this.particleData.lives[i];
+                            this.particleData.maxLives[writeIndex] = this.particleData.maxLives[i];
+                            this.particleData.sizes[writeIndex] = this.particleData.sizes[i];
+                        }
+                        writeIndex++;
+                    }
+                }
+                
+                this.activeParticles = writeIndex;
+            }
+            
+            updateBuffers() {
+                if (this.activeParticles === 0) return;
+                
+                const gl = this.gl;
+                
+                // Update all buffers with current particle data
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.position);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.positions.subarray(0, this.activeParticles * 2), gl.DYNAMIC_DRAW);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.velocity);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.velocities.subarray(0, this.activeParticles * 2), gl.DYNAMIC_DRAW);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.color);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.colors.subarray(0, this.activeParticles * 3), gl.DYNAMIC_DRAW);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.life);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.lives.subarray(0, this.activeParticles), gl.DYNAMIC_DRAW);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.maxLife);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.maxLives.subarray(0, this.activeParticles), gl.DYNAMIC_DRAW);
+                
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.size);
+                gl.bufferData(gl.ARRAY_BUFFER, this.particleData.sizes.subarray(0, this.activeParticles), gl.DYNAMIC_DRAW);
+            }
+            
+            render(currentTime) {
+                const gl = this.gl;
+                
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                
+                if (this.activeParticles === 0) return;
+                
+                gl.useProgram(this.program);
+                
+                // Set uniforms
+                gl.uniform2f(this.locations.resolution, this.canvas.width, this.canvas.height);
+                gl.uniform1f(this.locations.time, currentTime / 1000.0);
+                gl.uniform1f(this.locations.gravity, this.gravity);
+                
+                // Bind attributes
+                this.bindAttribute(this.buffers.position, this.locations.position, 2);
+                this.bindAttribute(this.buffers.velocity, this.locations.velocity, 2);
+                this.bindAttribute(this.buffers.color, this.locations.color, 3);
+                this.bindAttribute(this.buffers.life, this.locations.life, 1);
+                this.bindAttribute(this.buffers.maxLife, this.locations.maxLife, 1);
+                this.bindAttribute(this.buffers.size, this.locations.size, 1);
+                
+                // Draw particles
+                gl.drawArrays(gl.POINTS, 0, this.activeParticles);
+            }
+            
+            bindAttribute(buffer, location, size) {
+                if (location === -1) return;
+                
+                const gl = this.gl;
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.enableVertexAttribArray(location);
+                gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+            }
+            
+            initEventListeners() {
+                // Mouse/touch interaction
+                this.canvas.addEventListener('click', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    this.createBurst(x, y);
+                });
+                
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.touches[0].clientX - rect.left;
+                    const y = e.touches[0].clientY - rect.top;
+                    this.createBurst(x, y);
+                });
+                
+                // Controls
+                const particleCount = document.getElementById('particleCount');
+                const particleCountValue = document.getElementById('particleCountValue');
+                particleCount.addEventListener('input', (e) => {
+                    this.particlesPerBurst = parseInt(e.target.value);
+                    particleCountValue.textContent = e.target.value;
+                });
+                
+                const burstSpeed = document.getElementById('burstSpeed');
+                const burstSpeedValue = document.getElementById('burstSpeedValue');
+                burstSpeed.addEventListener('input', (e) => {
+                    this.burstSpeed = parseFloat(e.target.value);
+                    burstSpeedValue.textContent = e.target.value;
+                });
+                
+                const gravity = document.getElementById('gravity');
+                const gravityValue = document.getElementById('gravityValue');
+                gravity.addEventListener('input', (e) => {
+                    this.gravity = parseFloat(e.target.value);
+                    gravityValue.textContent = e.target.value;
+                });
+                
+                const particleSize = document.getElementById('particleSize');
+                const particleSizeValue = document.getElementById('particleSizeValue');
+                particleSize.addEventListener('input', (e) => {
+                    this.particleSize = parseFloat(e.target.value);
+                    particleSizeValue.textContent = e.target.value;
+                });
+                
+                // Color presets
+                document.querySelectorAll('.color-preset').forEach(preset => {
+                    preset.addEventListener('click', () => {
+                        document.querySelector('.color-preset.active').classList.remove('active');
+                        preset.classList.add('active');
+                        
+                        const colors = preset.dataset.colors.split(' ');
+                        this.currentColors = colors.map(color => color.split(',').map(parseFloat));
+                    });
+                });
+            }
+            
+            updateStats() {
+                document.getElementById('activeParticles').textContent = this.activeParticles;
+                document.getElementById('totalBursts').textContent = this.totalBursts;
+            }
+            
+            animate(currentTime = 0) {
+                // Calculate delta time and FPS
+                const deltaTime = (currentTime - this.lastFrameTime) / 1000.0;
+                this.lastFrameTime = currentTime;
+                
+                if (deltaTime > 0) {
+                    this.frameCount++;
+                    if (this.frameCount % 60 === 0) {
+                        this.fps = Math.round(1.0 / deltaTime);
+                        document.getElementById('fps').textContent = this.fps;
+                    }
+                }
+                
+                // Update particle physics
+                this.updateParticles(deltaTime);
+                
+                // Update GPU buffers if needed
+                if (this.activeParticles > 0) {
+                    this.updateBuffers();
+                }
+                
+                // Render frame
+                this.render(currentTime);
+                
+                // Update UI stats
+                this.updateStats();
+                
+                requestAnimationFrame((time) => this.animate(time));
+            }
+        }
+        
+        // Initialize the particle system when page loads
+        window.addEventListener('load', () => {
+            new ParticleSystem();
+        });
+    </script>
+</body>
+</html>
