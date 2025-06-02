@@ -105,19 +105,6 @@ Choose from 6 beautiful presets:
 - Alpha falloff & color modulation  
 - Additive blending optimization  
 
-### 💾 Buffer Management
-
-```js
-// Efficient particle data storage
-particleData = {
-  positions: Float32Array,
-  velocities: Float32Array,
-  colors: Float32Array,
-  lives: Float32Array,
-  maxLives: Float32Array,
-  sizes: Float32Array
-}
-
-
-
+### Deployment
+https://particle.ccbp.tech/
 
