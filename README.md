@@ -39,6 +39,85 @@ A C++ utility to detect circular dependencies in modular systems using graph cyc
 - ✔️ Efficient O(V + E) runtime  
 - ✔️ Includes comprehensive test cases  
 
-### Function Signature
-```cpp
-bool hasCircularDependency(int n, vector<vector<int>>& edges);
+---
+
+# 🌟 GPU-Accelerated Particle System
+
+A high-performance WebGL particle engine simulating magical energy bursts and fireworks with real-time interactivity and GPU-accelerated rendering. Built using modern shader techniques to handle thousands of particles at 60 FPS.
+
+---
+
+## 🎆 Features
+
+### 🔧 Core Particle System
+- **GPU-Accelerated Rendering** via WebGL shaders
+- **Physics Simulation** with gravity, velocity, and fading
+- **Dynamic Memory Management** with efficient particle lifecycle control
+- **Interactive Burst Creation** via mouse/touch input
+- **Real-time Performance Monitoring**
+
+### 🖼️ Advanced Graphics
+- Custom **Vertex & Fragment Shaders**
+- **Additive Blending** for glowing effects
+- **Point Sprite Rendering** for circular particles
+- **Color Evolution** over lifetime
+- Smooth **Alpha Transitions** using quadratic fading
+
+### 🚀 Performance Optimizations
+- **VBO Management** with dynamic buffer updates
+- **Memory Compaction** for removing dead particles
+- **Typed Arrays** for minimal garbage collection
+- **Optimized Render Pipeline** with low overhead
+
+---
+
+## 🎮 Interactive Controls
+
+### Real-Time Parameters
+- `Particle Count`: 100–2000 per burst  
+- `Burst Speed`: 50–300  
+- `Gravity`: 0–200  
+- `Particle Size`: 1–8  
+
+### 🎨 Color Themes
+Choose from 6 beautiful presets:
+- 🔥 **Fire** (Red/Orange/Pink)
+- 🌊 **Ocean** (Cyan/Blue/Purple)
+- ❄️ **Ice** (Blue/White/Light Blue)
+- 🌿 **Nature** (Green/Lime/Yellow-Green)
+- ☀️ **Solar** (Yellow/Orange/Pink)
+- 🌈 **Magic** (Pink/Purple/Blue)
+
+---
+
+## 🧠 Technical Implementation
+
+### 🧱 Shader Architecture
+
+**Vertex Shader Highlights**:
+- Position & velocity-based movement  
+- Gravity simulation  
+- Size scaling over lifetime  
+- Clip-space transformation  
+
+**Fragment Shader Highlights**:
+- Circular particle shape  
+- Alpha falloff & color modulation  
+- Additive blending optimization  
+
+### 💾 Buffer Management
+
+```js
+// Efficient particle data storage
+particleData = {
+  positions: Float32Array,
+  velocities: Float32Array,
+  colors: Float32Array,
+  lives: Float32Array,
+  maxLives: Float32Array,
+  sizes: Float32Array
+}
+
+
+
+
